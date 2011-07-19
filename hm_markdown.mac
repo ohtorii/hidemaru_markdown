@@ -1,0 +1,170 @@
+/*MarkdownをHTMLへ変換してエクスプローラーで閲覧するマクロ
+
+*注意
+	htmlファイルはテンポラリディレクトリへ生成されます、カレントディレクトリに
+	生成するとそれはそれで邪魔なので。
+
+	ブラウザーで表示する訳なのでHTMLは削除しません、このファイルはマクロを実行
+	するたびに上書きされます。
+
+	markedownで書いた結果をHTMLをブラウザーで確認する、単純な用途を想定していま
+	す、ヘビーに使い倒すことは想定していません。
+
+
+http://d.hatena.ne.jp/ohtorii/
+*/
+
+////////////////////////////////////////////////////////////////////////////
+//		ユーザーカスタマイズ
+////////////////////////////////////////////////////////////////////////////
+$g_markdown_pl 	= currentmacrodirectory + "\\" +  "markdown.pl";
+$g_exe_perl 	= "perl.exe";
+$g_exe_browser 	= "explorer.exe";
+
+//テンポラリファイル名（ベース名）
+//環境変数TMPのディレクトリに生成する。（可能な限り削除される）
+$g_tmpfile_base_name 	= "tmp_hidemaru_markedown_macro";
+
+//htmlのファイル名
+//環境変数TMPのディレクトリに生成する。（削除されない）
+$g_html_filename 		= "hidemaru_markedown_macro.html";
+
+
+
+
+////////////////////////////////////////////////////////////////////////////
+//		本体
+////////////////////////////////////////////////////////////////////////////
+//テンポラリファイル（絶対パス）
+$g_tmp_in_filename 		= "";
+call Main;
+call RemoveTmpFile;
+endmacro;
+
+Main:
+	if(! existfile($g_markdown_pl)){
+		message "ファイルが見つかりません。" + $g_markdown_pl;
+		return false;
+	}
+
+	//動作環境を固定化する。
+	//折りたたみを維持,部分編集を維持,範囲選択,最後に移動
+	//マクロ終了時に元に戻る。
+	setcompatiblemode 0x0003|0x000c|0x0200|0x2000;
+	disabledraw;
+	call DupCurrentFile;
+	if(! ##return){
+		return false;
+	}
+	call Convert;
+	if(! ##return){
+		return false;
+	}
+	call View;
+	if(! ##return){
+		return false;
+	}
+	return true;
+
+
+DupCurrentFile:
+	call GetTempFile ".txt";
+	if(0==strlen($$return)){
+		return false;
+	}
+	$g_tmp_in_filename=$$return;
+
+	call MakeTmpFile $g_tmp_in_filename;
+	if(0==strlen($$return)){
+		return false;
+	}
+
+	//備考：日本語をUNICODEで保存している場合の対策あり。
+	disableerrormsg;
+	appendsave $g_tmp_in_filename, noaddhist, sjis;
+	##ret = result;
+	enableerrormsg;
+	if(! ##ret){
+		message "テンポラリファイルへの書き込みに失敗しました";
+		return false;
+	}
+	return true;
+
+Convert:
+	call MakeHtmlFileName;
+	$g_tmp_html_filename = $$return;
+	$cmd = $g_exe_perl + " " + "\"" + $g_markdown_pl + "\"" + " " + "\"" +  $g_tmp_in_filename + "\"";
+	runex $cmd, 1,
+		0, "",
+		2, $g_tmp_html_filename,
+		1, "",
+		0, "",
+		2, 1, 0;
+	if(!result){
+		message "runex関数で失敗";
+		return false;
+	}
+	return true;
+
+View:
+	if(! existfile($g_tmp_html_filename)){
+		message "HTMLファイルが存在しません";
+		return false;
+	}
+	run $g_exe_browser + " " + "\"" + $g_tmp_html_filename + "\"";
+	if(! result){
+		message "runexで失敗";
+	}
+	return true;
+
+MakeTmpFile:
+	$$in_file=$$1;
+	if(! strlen($$in_file)){
+		return false;
+	}
+	runex "cmd /C copy nul " + $$in_file, 1,
+		0, "",
+		0, "",
+		0, "",
+		0, "",
+		2, 0, 0;
+	if(!result){
+		message "runex関数で失敗";
+	}
+	return result;
+
+MakeHtmlFileName:
+	$$tempdir = getenv("tmp");
+	if( leftstr( $$tempdir, 1 ) != "\\" ) {
+		$$tempdir = $$tempdir + "\\";
+	}
+	return $$tempdir + $g_html_filename;
+
+//テンポラリファイル作成サブルーチン
+GetTempFile:
+	$$ext = $$1;
+	$$tempdir = getenv("tmp");
+	if( leftstr( $$tempdir, 1 ) != "\\" ) {
+		$$tempdir = $$tempdir + "\\";
+	}
+	##n		= tickcount;
+	##end 	= ##n + 1000;
+	while(##n < ##end){
+	 	$$tempfile = $$tempdir + $g_tmpfile_base_name + str(##n) + $$ext;
+	 	if( !existfile( $$tempfile ) ) {
+			return $$tempfile;
+		}
+	 	##n = ##n + 1;
+	}
+	message "テンポラリファイルが作成できません\n" + $$tempfile;
+	return "";
+
+
+RemoveTmpFile:
+	if(strlen($g_tmp_in_filename)){
+		deletefile $g_tmp_in_filename;
+		$g_tmp_in_filename="";
+	}
+	return ;
+
+
