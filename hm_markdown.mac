@@ -75,7 +75,7 @@ DupCurrentFile:
 	$g_tmp_in_filename=$$return;
 
 	call MakeTmpFile $g_tmp_in_filename;
-	if(0==strlen($$return)){
+	if(! ##return){
 		return false;
 	}
 
@@ -128,10 +128,11 @@ MakeTmpFile:
 		0, "",
 		0, "",
 		2, 0, 0;
-	if(!result){
+	##ret = result;
+	if(! ##ret){
 		message "runexŠÖ”‚Å¸”s";
 	}
-	return result;
+	return ##ret;
 
 MakeHtmlFileName:
 	$$tempdir = getenv("tmp");
